@@ -1,0 +1,1560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AVATAR LAB — Virtual Avatar Creator</title>
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --bg: #0d1a2d;
+            --surface: #132235;
+            --surface-light: #1a2e47;
+            --border: #2a4260;
+            --text: #e8f0f8;
+            --text-dim: #6a8aab;
+            --accent: #00d4ff;
+            --accent-glow: #00d4ff55;
+            --avatar-skin: #ffdbac;
+            --avatar-eyes: #2d2d2d;
+        }
+        
+        body {
+            font-family: 'Nunito', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .app-container {
+            display: grid;
+            grid-template-columns: 1fr 360px;
+            min-height: 100vh;
+        }
+        
+        @media (max-width: 1100px) {
+            .app-container {
+                grid-template-columns: 1fr;
+            }
+            .panel {
+                order: -1;
+            }
+        }
+        
+        /* Studio Stage */
+        .stage {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+        }
+        
+        .stage-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 30px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .logo-icon {
+            font-size: 28px;
+        }
+        
+        .logo span {
+            color: var(--accent);
+        }
+        
+        .recording-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            background: #ff4444;
+            border-radius: 50px;
+            font-size: 14px;
+            font-weight: 700;
+            color: white;
+            display: none;
+        }
+        
+        .recording-indicator.active {
+            display: flex;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .rec-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: white;
+        }
+        
+        /* Canvas Area */
+        .canvas-area {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 30px;
+            background: radial-gradient(ellipse at center, var(--surface-light) 0%, var(--bg) 100%);
+        }
+        
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            aspect-ratio: 1;
+            background: linear-gradient(180deg, #1a2e47 0%, #0d1a2d 100%);
+            border-radius: 24px;
+            overflow: hidden;
+            border: 3px solid var(--border);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+        }
+        
+        #avatarCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #overlayCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0.5;
+        }
+        
+        /* Expression Indicators */
+        .expression-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .expr-badge {
+            padding: 8px 14px;
+            background: rgba(0,0,0,0.6);
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* Control Bar */
+        .control-bar {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+        }
+        
+        .control-btn {
+            padding: 12px 20px;
+            background: rgba(0,0,0,0.7);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text);
+            font-family: 'Nunito', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .control-btn:hover {
+            border-color: var(--accent);
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+        
+        .control-btn.primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: var(--bg);
+        }
+        
+        /* Loading Overlay */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--surface);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            z-index: 100;
+            border-radius: 24px;
+        }
+        
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            font-size: 18px;
+            color: var(--text-dim);
+        }
+        
+        /* Control Panel */
+        .panel {
+            background: var(--surface);
+            padding: 30px;
+            overflow-y: auto;
+            max-height: 100vh;
+        }
+        
+        .panel-section {
+            margin-bottom: 30px;
+        }
+        
+        .panel-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+        }
+        
+        /* Avatar Style Grid */
+        .style-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .style-card {
+            padding: 16px;
+            background: var(--surface-light);
+            border: 2px solid var(--border);
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+        
+        .style-card:hover {
+            border-color: var(--text-dim);
+        }
+        
+        .style-card.active {
+            border-color: var(--accent);
+            background: var(--accent-glow);
+        }
+        
+        .style-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+        
+        .style-name {
+            font-size: 14px;
+            font-weight: 700;
+        }
+        
+        /* Color Pickers */
+        .color-section {
+            padding: 20px;
+            background: var(--surface-light);
+            border-radius: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .color-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        
+        .color-label {
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .color-picker {
+            width: 50px;
+            height: 40px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            background: transparent;
+        }
+        
+        /* Accessories */
+        .acc-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .acc-item {
+            padding: 14px;
+            background: var(--surface-light);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            font-size: 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .acc-item:hover {
+            border-color: var(--text-dim);
+        }
+        
+        .acc-item.active {
+            border-color: var(--accent);
+            background: var(--accent-glow);
+        }
+        
+        /* Backgrounds */
+        .bg-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .bg-item {
+            aspect-ratio: 1;
+            border-radius: 10px;
+            cursor: pointer;
+            border: 3px solid transparent;
+            transition: all 0.2s ease;
+        }
+        
+        .bg-item:hover {
+            transform: scale(1.05);
+        }
+        
+        .bg-item.active {
+            border-color: var(--accent);
+        }
+        
+        /* Capture Buttons */
+        .capture-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .capture-btn {
+            flex: 1;
+            padding: 16px;
+            background: var(--surface-light);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            color: var(--text);
+            font-family: 'Nunito', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .capture-btn:hover {
+            border-color: var(--accent);
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+        
+        .capture-btn.primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: var(--bg);
+        }
+        
+        .capture-btn.recording {
+            background: #ff4444;
+            border-color: #ff4444;
+            color: white;
+            animation: pulse 1s infinite;
+        }
+        
+        /* Expression Bars */
+        .expr-bars {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .expr-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .expr-label {
+            width: 36px;
+            font-size: 16px;
+        }
+        
+        .expr-track {
+            flex: 1;
+            height: 8px;
+            background: var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .expr-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 4px;
+            transition: width 0.1s ease;
+        }
+        
+        .expr-percent {
+            width: 40px;
+            font-size: 12px;
+            font-family: 'Space Mono', monospace;
+            color: var(--text-dim);
+            text-align: right;
+        }
+        
+        /* Stats */
+        .stats-row {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .stat-item {
+            flex: 1;
+            padding: 14px;
+            background: var(--surface-light);
+            border-radius: 12px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-top: 4px;
+        }
+        
+        /* Hidden */
+        .hidden {
+            display: none !important;
+        }
+        
+        /* Status */
+        .status-message {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 16px 32px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 50px;
+            font-size: 14px;
+            font-weight: 600;
+            z-index: 1000;
+            display: none;
+            animation: slideUp 0.3s ease;
+        }
+        
+        .status-message.show {
+            display: block;
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="stage">
+            <div class="stage-header">
+                <div class="logo">
+                    <span class="logo-icon">🎭</span>
+                    <span>AVATAR LAB</span>
+                </div>
+                <div class="recording-indicator" id="recordingIndicator">
+                    <div class="rec-dot"></div>
+                    <span>REC</span>
+                </div>
+            </div>
+            
+            <div class="canvas-area">
+                <div class="canvas-container">
+                    <canvas id="avatarCanvas"></canvas>
+                    <canvas id="overlayCanvas"></canvas>
+                    
+                    <div class="expression-overlay">
+                        <div class="expr-badge" id="dominantExpr">
+                            <span id="exprEmoji">😐</span>
+                            <span id="exprText">Neutral</span>
+                        </div>
+                    </div>
+                    
+                    <div class="control-bar">
+                        <button class="control-btn" id="mirrorBtn">↔ Mirror</button>
+                        <button class="control-btn" id="overlayBtn">👁 Overlay</button>
+                        <button class="control-btn primary" id="snapshotBtn">📸 Snap</button>
+                    </div>
+                    
+                    <div class="loading-overlay" id="loadingOverlay">
+                        <div class="loading-spinner"></div>
+                        <div class="loading-text">Loading avatar model...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="panel">
+            <div class="panel-section">
+                <div class="panel-title">Avatar Style</div>
+                <div class="style-grid">
+                    <div class="style-card active" data-style="toon">
+                        <div class="style-icon">🥸</div>
+                        <div class="style-name">Classic</div>
+                    </div>
+                    <div class="style-card" data-style="anime">
+                        <div class="style-icon">🐱</div>
+                        <div class="style-name">Anime</div>
+                    </div>
+                    <div class="style-card" data-style="panda">
+                        <div class="style-icon">🐼</div>
+                        <div class="style-name">Panda</div>
+                    </div>
+                    <div class="style-card" data-style="alien">
+                        <div class="style-icon">👽</div>
+                        <div class="style-name">Alien</div>
+                    </div>
+                    <div class="style-card" data-style="robot">
+                        <div class="style-icon">🤖</div>
+                        <div class="style-name">Robot</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel-section">
+                <div class="panel-title">Colors</div>
+                <div class="color-section">
+                    <div class="color-row">
+                        <span class="color-label">Skin</span>
+                        <input type="color" class="color-picker" id="skinColor" value="#ffdbac">
+                    </div>
+                    <div class="color-row">
+                        <span class="color-label">Eyes</span>
+                        <input type="color" class="color-picker" id="eyeColor" value="#2d2d2d">
+                    </div>
+                    <div class="color-row">
+                        <span class="color-label">Hair</span>
+                        <input type="color" class="color-picker" id="hairColor" value="#4a3728">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel-section">
+                <div class="panel-title">Accessories</div>
+                <div class="acc-grid">
+                    <div class="acc-item" data-acc="glasses">👓</div>
+                    <div class="acc-item" data-acc="hat">🎩</div>
+                    <div class="acc-item" data-acc="crown">👑</div>
+                    <div class="acc-item" data-acc="bow">🎀</div>
+                    <div class="acc-item" data-acc="mask">😷</div>
+                    <div class="acc-item" data-acc="headphones">🎧</div>
+                </div>
+            </div>
+            
+            <div class="panel-section">
+                <div class="panel-title">Background</div>
+                <div class="bg-grid">
+                    <div class="bg-item active" data-bg="gradient" style="background: linear-gradient(180deg, #1a2e47 0%, #0d1a2d 100%);"></div>
+                    <div class="bg-item" data-bg="purple" style="background: linear-gradient(180deg, #2d1b4e 0%, #1a0f2e 100%);"></div>
+                    <div class="bg-item" data-bg="green" style="background: linear-gradient(180deg, #1b4e2d 0%, #0f2e1a 100%);"></div>
+                    <div class="bg-item" data-bg="red" style="background: linear-gradient(180deg, #4e1b1b 0%, #2e0f0f 100%);"></div>
+                </div>
+            </div>
+            
+            <div class="panel-section">
+                <div class="panel-title">Capture</div>
+                <div class="capture-row">
+                    <button class="capture-btn" id="startCameraBtn">📹 Start Camera</button>
+                    <button class="capture-btn primary" id="recordBtn">⏺ Record</button>
+                </div>
+            </div>
+            
+            <div class="panel-section">
+                <div class="panel-title">Expression Analysis</div>
+                <div class="expr-bars">
+                    <div class="expr-bar">
+                        <span class="expr-label">😊</span>
+                        <div class="expr-track">
+                            <div class="expr-fill" id="happyFill" style="width: 0%"></div>
+                        </div>
+                        <span class="expr-percent" id="happyPercent">0%</span>
+                    </div>
+                    <div class="expr-bar">
+                        <span class="expr-label">😢</span>
+                        <div class="expr-track">
+                            <div class="expr-fill" id="sadFill" style="width: 0%"></div>
+                        </div>
+                        <span class="expr-percent" id="sadPercent">0%</span>
+                    </div>
+                    <div class="expr-bar">
+                        <span class="expr-label">😠</span>
+                        <div class="expr-track">
+                            <div class="expr-fill" id="angryFill" style="width: 0%"></div>
+                        </div>
+                        <span class="expr-percent" id="angryPercent">0%</span>
+                    </div>
+                    <div class="expr-bar">
+                        <span class="expr-label">😲</span>
+                        <div class="expr-track">
+                            <div class="expr-fill" id="surprisedFill" style="width: 0%"></div>
+                        </div>
+                        <span class="expr-percent" id="surprisedPercent">0%</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel-section">
+                <div class="panel-title">Stats</div>
+                <div class="stats-row">
+                    <div class="stat-item">
+                        <div class="stat-value" id="fpsValue">0</div>
+                        <div class="stat-label">FPS</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="facesValue">0</div>
+                        <div class="stat-label">Faces</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="status-message" id="statusMessage"></div>
+    
+    <script>
+        // Avatar Lab - Virtual Avatar Creator
+        const avatarCanvas = document.getElementById('avatarCanvas');
+        const overlayCanvas = document.getElementById('overlayCanvas');
+        const avatarCtx = avatarCanvas.getContext('2d');
+        const overlayCtx = overlayCanvas.getContext('2d');
+        
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const recordingIndicator = document.getElementById('recordingIndicator');
+        const statusMessage = document.getElementById('statusMessage');
+        
+        // Avatar state
+        let avatarState = {
+            style: 'toon',
+            skinColor: '#ffdbac',
+            eyeColor: '#2d2d2d',
+            hairColor: '#4a3728',
+            accessories: [],
+            background: 'gradient',
+            mirrored: false,
+            showOverlay: false
+        };
+        
+        // Face tracking state
+        let video = null;
+        let stream = null;
+        let isRecording = false;
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let lastFrameTime = 0;
+        let frameCount = 0;
+        let fps = 0;
+        
+        // Expression detection
+        let currentExpression = 'neutral';
+        let expressionScores = {
+            happy: 0,
+            sad: 0,
+            angry: 0,
+            surprised: 0
+        };
+        
+        // Initialize canvas size
+        function initCanvas() {
+            const container = document.querySelector('.canvas-container');
+            const size = container.offsetWidth;
+            avatarCanvas.width = size;
+            avatarCanvas.height = size;
+            overlayCanvas.width = size;
+            overlayCanvas.height = size;
+        }
+        
+        // Draw avatar based on style
+        function drawAvatar(facialLandmarks = null) {
+            const ctx = avatarCtx;
+            const size = avatarCanvas.width;
+            const centerX = size / 2;
+            const centerY = size / 2;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, size, size);
+            
+            // Draw background
+            drawBackground(ctx, size);
+            
+            // Apply mirror if enabled
+            ctx.save();
+            if (avatarState.mirrored) {
+                ctx.translate(size, 0);
+                ctx.scale(-1, 1);
+            }
+            
+            // Draw based on style
+            switch(avatarState.style) {
+                case 'toon':
+                    drawToonAvatar(ctx, centerX, centerY, facialLandmarks);
+                    break;
+                case 'anime':
+                    drawAnimeAvatar(ctx, centerX, centerY, facialLandmarks);
+                    break;
+                case 'panda':
+                    drawPandaAvatar(ctx, centerX, centerY, facialLandmarks);
+                    break;
+                case 'alien':
+                    drawAlienAvatar(ctx, centerX, centerY, facialLandmarks);
+                    break;
+                case 'robot':
+                    drawRobotAvatar(ctx, centerX, centerY, facialLandmarks);
+                    break;
+            }
+            
+            ctx.restore();
+            
+            // Draw accessories
+            drawAccessories(ctx, centerX, centerY, facialLandmarks);
+        }
+        
+        function drawBackground(ctx, size) {
+            const gradients = {
+                gradient: ['#1a2e47', '#0d1a2d'],
+                purple: ['#2d1b4e', '#1a0f2e'],
+                green: ['#1b4e2d', '#0f2e1a'],
+                red: ['#4e1b1b', '#2e0f0f']
+            };
+            
+            const colors = gradients[avatarState.background] || gradients.gradient;
+            const gradient = ctx.createLinearGradient(0, 0, 0, size);
+            gradient.addColorStop(0, colors[0]);
+            gradient.addColorStop(1, colors[1]);
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+        }
+        
+        function drawToonAvatar(ctx, cx, cy, landmarks) {
+            const headRadius = 120;
+            
+            // Head
+            ctx.beginPath();
+            ctx.arc(cx, cy, headRadius, 0, Math.PI * 2);
+            ctx.fillStyle = avatarState.skinColor;
+            ctx.fill();
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            // Eyes
+            const eyeY = cy - 20;
+            const eyeOffset = 40;
+            const eyeSize = 25;
+            
+            // Left eye
+            ctx.beginPath();
+            ctx.arc(cx - eyeOffset, eyeY, eyeSize, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+            ctx.stroke();
+            
+            // Right eye
+            ctx.beginPath();
+            ctx.arc(cx + eyeOffset, eyeY, eyeSize, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+            ctx.stroke();
+            
+            // Pupils
+            const pupilSize = 12;
+            ctx.beginPath();
+            ctx.arc(cx - eyeOffset, eyeY, pupilSize, 0, Math.PI * 2);
+            ctx.fillStyle = avatarState.eyeColor;
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(cx + eyeOffset, eyeY, pupilSize, 0, Math.PI * 2);
+            ctx.fillStyle = avatarState.eyeColor;
+            ctx.fill();
+            
+            // Mouth based on expression
+            drawMouth(ctx, cx, cy + 50, 60, 30);
+            
+            // Hair
+            ctx.beginPath();
+            ctx.arc(cx, cy - 30, headRadius + 10, Math.PI, 0);
+            ctx.fillStyle = avatarState.hairColor;
+            ctx.fill();
+            ctx.stroke();
+        }
+        
+        function drawAnimeAvatar(ctx, cx, cy, landmarks) {
+            const headRadius = 110;
+            
+            // Head
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, headRadius, headRadius * 1.1, 0, 0, Math.PI * 2);
+            ctx.fillStyle = avatarState.skinColor;
+            ctx.fill();
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Large anime eyes
+            const eyeY = cy - 15;
+            const eyeOffset = 45;
+            const eyeWidth = 35;
+            const eyeHeight = 45;
+            
+            // Left eye
+            ctx.beginPath();
+            ctx.ellipse(cx - eyeOffset, eyeY, eyeWidth, eyeHeight, 0, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+            ctx.stroke();
+            
+            // Right eye
+            ctx.beginPath();
+            ctx.ellipse(cx + eyeOffset, eyeY, eyeWidth, eyeHeight, 0, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+            ctx.stroke();
+            
+            // Anime pupils
+            const pupilSize = 20;
+            ctx.beginPath();
+            ctx.arc(cx - eyeOffset, eyeY + 5, pupilSize, 0, Math.PI * 2);
+            ctx.fillStyle = avatarState.eyeColor;
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(cx + eyeOffset, eyeY + 5, pupilSize, 0, Math.PI * 2);
+            ctx.fillStyle = avatarState.eyeColor;
+            ctx.fill();
+            
+            // Eye shine
+            ctx.beginPath();
+            ctx.arc(cx - eyeOffset - 8, eyeY - 10, 6, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(cx + eyeOffset - 8, eyeY - 10, 6, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+            
+            // Small mouth
+            drawMouth(ctx, cx, cy + 55, 20, 8);
+            
+            // Anime hair
+            ctx.beginPath();
+            ctx.moveTo(cx - headRadius, cy - 20);
+            ctx.quadraticCurveTo(cx - headRadius - 20, cy - 80, cx - 60, cy - 100);
+            ctx.quadraticCurveTo(cx, cy - 120, cx + 60, cy - 100);
+            ctx.quadraticCurveTo(cx + headRadius + 20, cy - 80, cx + headRadius, cy - 20);
+            ctx.fillStyle = avatarState.hairColor;
+            ctx.fill();
+            ctx.stroke();
+        }
+        
+        function drawPandaAvatar(ctx, cx, cy, landmarks) {
+            const headRadius = 120;
+            
+            // White head
+            ctx.beginPath();
+            ctx.arc(cx, cy, headRadius, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            // Black ears
+            ctx.beginPath();
+            ctx.arc(cx - 90, cy - 70, 40, 0, Math.PI * 2);
+            ctx.fillStyle = '#000';
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(cx + 90, cy - 70, 40, 0, Math.PI * 2);
+            ctx.fillStyle = '#000';
+            ctx.fill();
+            
+            // Eye patches
+            ctx.beginPath();
+            ctx.ellipse(cx - 45, cy - 20, 35, 30, -0.2, 0, Math.PI * 2);
+            ctx.fillStyle = '#000';
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.ellipse(cx + 45, cy - 20, 35, 30, 0.2, 0, Math.PI * 2);
+            ctx.fillStyle = '#000';
+            ctx.fill();
+            
+            // Eyes
+            const eyeY = cy - 20;
+            ctx.beginPath();
+            ctx.arc(cx - 45, eyeY, 15, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(cx + 45, eyeY, 15, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+            
+            // Nose
+            ctx.beginPath();
+            ctx.ellipse(cx, cy + 30, 20, 15, 0, 0, Math.PI * 2);
+            ctx.fillStyle = '#000';
+            ctx.fill();
+            
+            // Mouth
+            ctx.beginPath();
+            ctx.arc(cx, cy + 45, 15, 0, Math.PI);
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        }
+        
+        function drawAlienAvatar(ctx, cx, cy, landmarks) {
+            const headRadius = 110;
+            
+            // Green head
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, headRadius * 0.8, headRadius, 0, 0, Math.PI * 2);
+            ctx.fillStyle = '#7cb342';
+            ctx.fill();
+            ctx.strokeStyle = '#558b2f';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Large black eyes
+            const eyeY = cy - 20;
+            const eyeOffset = 35;
+            const eyeWidth = 25;
+            const eyeHeight = 40;
+            
+            ctx.beginPath();
+            ctx.ellipse(cx - eyeOffset, eyeY, eyeWidth, eyeHeight, 0, 0, Math.PI * 2);
+            ctx.fillStyle = '#000';
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.ellipse(cx + eyeOffset, eyeY, eyeWidth, eyeHeight, 0, 0, Math.PI * 2);
+            ctx.fillStyle = '#000';
+            ctx.fill();
+            
+            // Small mouth
+            ctx.beginPath();
+            ctx.ellipse(cx, cy + 50, 15, 5, 0, 0, Math.PI * 2);
+            ctx.strokeStyle = '#558b2f';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Antenna
+            ctx.beginPath();
+            ctx.moveTo(cx - 30, cy - headRadius);
+            ctx.lineTo(cx - 40, cy - headRadius - 30);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.arc(cx - 40, cy - headRadius - 35, 8, 0, Math.PI * 2);
+            ctx.fillStyle = '#8bc34a';
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.moveTo(cx + 30, cy - headRadius);
+            ctx.lineTo(cx + 40, cy - headRadius - 30);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.arc(cx + 40, cy - headRadius - 35, 8, 0, Math.PI * 2);
+            ctx.fillStyle = '#8bc34a';
+            ctx.fill();
+        }
+        
+        function drawRobotAvatar(ctx, cx, cy, landmarks) {
+            const headWidth = 140;
+            const headHeight = 160;
+            
+            // Metal head
+            ctx.fillStyle = '#607d8b';
+            ctx.fillRect(cx - headWidth/2, cy - headHeight/2, headWidth, headHeight);
+            ctx.strokeStyle = '#455a64';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(cx - headWidth/2, cy - headHeight/2, headWidth, headHeight);
+            
+            // Antenna
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - headHeight/2);
+            ctx.lineTo(cx, cy - headHeight/2 - 30);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.arc(cx, cy - headHeight/2 - 35, 10, 0, Math.PI * 2);
+            ctx.fillStyle = '#f44336';
+            ctx.fill();
+            
+            // Eyes (LED style)
+            const eyeY = cy - 20;
+            const eyeOffset = 35;
+            
+            ctx.beginPath();
+            ctx.arc(cx - eyeOffset, eyeY, 20, 0, Math.PI * 2);
+            ctx.fillStyle = '#00bcd4';
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(cx + eyeOffset, eyeY, 20, 0, Math.PI * 2);
+            ctx.fillStyle = '#00bcd4';
+            ctx.fill();
+            
+            // Mouth (grid)
+            const mouthY = cy + 40;
+            for (let i = 0; i < 3; i++) {
+                for (let j = 0; j < 5; j++) {
+                    ctx.fillStyle = i === 1 && j === 2 ? '#00bcd4' : '#37474f';
+                    ctx.fillRect(cx - 30 + j * 15, mouthY + i * 12, 10, 8);
+                }
+            }
+            
+            // Bolts
+            ctx.fillStyle = '#90a4ae';
+            ctx.beginPath();
+            ctx.arc(cx - headWidth/2 + 10, cy - headHeight/2 + 10, 6, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(cx + headWidth/2 - 10, cy - headHeight/2 + 10, 6, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(cx - headWidth/2 + 10, cy + headHeight/2 - 10, 6, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(cx + headWidth/2 - 10, cy + headHeight/2 - 10, 6, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        function drawMouth(ctx, cx, cy, width, height) {
+            ctx.beginPath();
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 3;
+            
+            switch(currentExpression) {
+                case 'happy':
+                    ctx.arc(cx, cy - height/2, width/2, 0.2 * Math.PI, 0.8 * Math.PI);
+                    break;
+                case 'sad':
+                    ctx.arc(cx, cy + height, width/2, 1.2 * Math.PI, 1.8 * Math.PI);
+                    break;
+                case 'angry':
+                    ctx.moveTo(cx - width/2, cy);
+                    ctx.lineTo(cx + width/2, cy);
+                    break;
+                case 'surprised':
+                    ctx.ellipse(cx, cy, width/4, height/2, 0, 0, Math.PI * 2);
+                    break;
+                default:
+                    ctx.moveTo(cx - width/2, cy);
+                    ctx.quadraticCurveTo(cx, cy + height/4, cx + width/2, cy);
+            }
+            ctx.stroke();
+        }
+        
+        function drawAccessories(ctx, cx, cy, landmarks) {
+            avatarState.accessories.forEach(acc => {
+                switch(acc) {
+                    case 'glasses':
+                        drawGlasses(ctx, cx, cy);
+                        break;
+                    case 'hat':
+                        drawHat(ctx, cx, cy);
+                        break;
+                    case 'crown':
+                        drawCrown(ctx, cx, cy);
+                        break;
+                    case 'bow':
+                        drawBow(ctx, cx, cy);
+                        break;
+                    case 'mask':
+                        drawMask(ctx, cx, cy);
+                        break;
+                    case 'headphones':
+                        drawHeadphones(ctx, cx, cy);
+                        break;
+                }
+            });
+        }
+        
+        function drawGlasses(ctx, cx, cy) {
+            const eyeY = cy - 20;
+            const eyeOffset = 40;
+            const lensWidth = 35;
+            const lensHeight = 25;
+            
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 4;
+            
+            // Left lens
+            ctx.beginPath();
+            ctx.rect(cx - eyeOffset - lensWidth/2, eyeY - lensHeight/2, lensWidth, lensHeight);
+            ctx.stroke();
+            
+            // Right lens
+            ctx.beginPath();
+            ctx.rect(cx + eyeOffset - lensWidth/2, eyeY - lensHeight/2, lensWidth, lensHeight);
+            ctx.stroke();
+            
+            // Bridge
+            ctx.beginPath();
+            ctx.moveTo(cx - eyeOffset + lensWidth/2, eyeY);
+            ctx.lineTo(cx + eyeOffset - lensWidth/2, eyeY);
+            ctx.stroke();
+        }
+        
+        function drawHat(ctx, cx, cy) {
+            const headRadius = 120;
+            
+            // Hat brim
+            ctx.fillStyle = '#333';
+            ctx.beginPath();
+            ctx.ellipse(cx, cy - headRadius + 20, 100, 20, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Hat top
+            ctx.fillStyle = '#333';
+            ctx.fillRect(cx - 50, cy - headRadius - 60, 100, 80);
+            
+            // Hat band
+            ctx.fillStyle = '#f44336';
+            ctx.fillRect(cx - 50, cy - headRadius + 10, 100, 15);
+        }
+        
+        function drawCrown(ctx, cx, cy) {
+            const headRadius = 120;
+            const crownY = cy - headRadius - 30;
+            
+            ctx.fillStyle = '#ffd700';
+            ctx.strokeStyle = '#daa520';
+            ctx.lineWidth = 3;
+            
+            ctx.beginPath();
+            ctx.moveTo(cx - 60, crownY + 50);
+            ctx.lineTo(cx - 60, crownY);
+            ctx.lineTo(cx - 30, crownY + 25);
+            ctx.lineTo(cx, crownY - 10);
+            ctx.lineTo(cx + 30, crownY + 25);
+            ctx.lineTo(cx + 60, crownY);
+            ctx.lineTo(cx + 60, crownY + 50);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            
+            // Gems
+            ctx.fillStyle = '#e91e63';
+            ctx.beginPath();
+            ctx.arc(cx, crownY + 20, 8, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        function drawBow(ctx, cx, cy) {
+            const headRadius = 120;
+            const bowY = cy - headRadius - 10;
+            
+            ctx.fillStyle = '#e91e63';
+            
+            // Left bow
+            ctx.beginPath();
+            ctx.ellipse(cx - 30, bowY, 25, 15, -0.3, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Right bow
+            ctx.beginPath();
+            ctx.ellipse(cx + 30, bowY, 25, 15, 0.3, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Center
+            ctx.beginPath();
+            ctx.arc(cx, bowY, 10, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        function drawMask(ctx, cx, cy) {
+            ctx.fillStyle = '#fff';
+            ctx.strokeStyle = '#ddd';
+            ctx.lineWidth = 2;
+            
+            ctx.beginPath();
+            ctx.ellipse(cx, cy + 40, 50, 30, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+        }
+        
+        function drawHeadphones(ctx, cx, cy) {
+            const headRadius = 120;
+            
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 8;
+            
+            // Headband
+            ctx.beginPath();
+            ctx.arc(cx, cy, headRadius + 20, Math.PI, 0);
+            ctx.stroke();
+            
+            // Ear cups
+            ctx.fillStyle = '#333';
+            ctx.beginPath();
+            ctx.ellipse(cx - headRadius - 10, cy, 25, 35, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.ellipse(cx + headRadius + 10, cy, 25, 35, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Ear cushions
+            ctx.fillStyle = '#f44336';
+            ctx.beginPath();
+            ctx.ellipse(cx - headRadius - 10, cy, 15, 25, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.ellipse(cx + headRadius + 10, cy, 15, 25, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Update expression display
+        function updateExpressionDisplay() {
+            const emojiMap = {
+                neutral: '😐',
+                happy: '😊',
+                sad: '😢',
+                angry: '😠',
+                surprised: '😲'
+            };
+            
+            document.getElementById('exprEmoji').textContent = emojiMap[currentExpression] || '😐';
+            document.getElementById('exprText').textContent = currentExpression.charAt(0).toUpperCase() + currentExpression.slice(1);
+            
+            // Update expression bars
+            document.getElementById('happyFill').style.width = (expressionScores.happy * 100) + '%';
+            document.getElementById('happyPercent').textContent = Math.round(expressionScores.happy * 100) + '%';
+            
+            document.getElementById('sadFill').style.width = (expressionScores.sad * 100) + '%';
+            document.getElementById('sadPercent').textContent = Math.round(expressionScores.sad * 100) + '%';
+            
+            document.getElementById('angryFill').style.width = (expressionScores.angry * 100) + '%';
+            document.getElementById('angryPercent').textContent = Math.round(expressionScores.angry * 100) + '%';
+            
+            document.getElementById('surprisedFill').style.width = (expressionScores.surprised * 100) + '%';
+            document.getElementById('surprisedPercent').textContent = Math.round(expressionScores.surprised * 100) + '%';
+        }
+        
+        // Show status message
+        function showStatus(message) {
+            statusMessage.textContent = message;
+            statusMessage.classList.add('show');
+            setTimeout(() => {
+                statusMessage.classList.remove('show');
+            }, 3000);
+        }
+        
+        // Start camera
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480 } 
+                });
+                
+                video = document.createElement('video');
+                video.srcObject = stream;
+                video.play();
+                
+                video.onloadedmetadata = () => {
+                    loadingOverlay.classList.add('hidden');
+                    showStatus('Camera started!');
+                    detectFaces();
+                };
+            } catch (err) {
+                console.error('Camera error:', err);
+                loadingOverlay.classList.add('hidden');
+                showStatus('Camera access denied');
+            }
+        }
+        
+        // Face detection
+        async function detectFaces() {
+            if (!video) return;
+            
+            // Calculate FPS
+            const now = performance.now();
+            frameCount++;
+            if (now - lastFrameTime >= 1000) {
+                fps = frameCount;
+                frameCount = 0;
+                lastFrameTime = now;
+                document.getElementById('fpsValue').textContent = fps;
+            }
+            
+            // Draw video on overlay canvas if enabled
+            if (avatarState.showOverlay && video.readyState === 4) {
+                overlayCtx.drawImage(video, 0, 0, overlayCanvas.width, overlayCanvas.height);
+            } else {
+                overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            }
+            
+            // Simulate expression changes (in real app, use face-api.js)
+            simulateExpressions();
+            
+            // Draw avatar
+            drawAvatar();
+            
+            // Update stats
+            document.getElementById('facesValue').textContent = '1';
+            
+            requestAnimationFrame(detectFaces);
+        }
+        
+        // Simulate expression changes (placeholder for real face-api integration)
+        function simulateExpressions() {
+            // In a real implementation, this would use face-api.js expressions
+            const expressions = ['neutral', 'happy', 'sad', 'angry', 'surprised'];
+            const randomExpr = expressions[Math.floor(Math.random() * expressions.length)];
+            
+            // Only change occasionally
+            if (Math.random() < 0.02) {
+                currentExpression = randomExpr;
+            }
+            
+            // Update scores
+            expressionScores.happy = currentExpression === 'happy' ? 0.8 + Math.random() * 0.2 : Math.random() * 0.2;
+            expressionScores.sad = currentExpression === 'sad' ? 0.8 + Math.random() * 0.2 : Math.random() * 0.2;
+            expressionScores.angry = currentExpression === 'angry' ? 0.8 + Math.random() * 0.2 : Math.random() * 0.2;
+            expressionScores.surprised = currentExpression === 'surprised' ? 0.8 + Math.random() * 0.2 : Math.random() * 0.2;
+            
+            updateExpressionDisplay();
+        }
+        
+        // Recording
+        function toggleRecording() {
+            if (isRecording) {
+                stopRecording();
+            } else {
+                startRecording();
+            }
+        }
+        
+        function startRecording() {
+            if (!stream) {
+                showStatus('Start camera first');
+                return;
+            }
+            
+            recordedChunks = [];
+            mediaRecorder = new MediaRecorder(stream);
+            
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) {
+                    recordedChunks.push(e.data);
+                }
+            };
+            
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'avatar-recording.webm';
+                a.click();
+                showStatus('Recording saved!');
+            };
+            
+            mediaRecorder.start();
+            isRecording = true;
+            recordingIndicator.classList.add('active');
+            document.getElementById('recordBtn').classList.add('recording');
+            document.getElementById('recordBtn').textContent = '⏹ Stop';
+            showStatus('Recording started');
+        }
+        
+        function stopRecording() {
+            if (mediaRecorder && isRecording) {
+                mediaRecorder.stop();
+                isRecording = false;
+                recordingIndicator.classList.remove('active');
+                document.getElementById('recordBtn').classList.remove('recording');
+                document.getElementById('recordBtn').textContent = '⏺ Record';
+            }
+        }
+        
+        // Snapshot
+        function takeSnapshot() {
+            const link = document.createElement('a');
+            link.download = 'avatar-snapshot.png';
+            link.href = avatarCanvas.toDataURL();
+            link.click();
+            showStatus('Snapshot saved!');
+        }
+        
+        // Event listeners
+        document.querySelectorAll('.style-card').forEach(card => {
+            card.addEventListener('click', () => {
+                document.querySelectorAll('.style-card').forEach(c => c.classList.remove('active'));
+                card.classList.add('active');
+                avatarState.style = card.dataset.style;
+                drawAvatar();
+            });
+        });
+        
+        document.querySelectorAll('.acc-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const acc = item.dataset.acc;
+                if (avatarState.accessories.includes(acc)) {
+                    avatarState.accessories = avatarState.accessories.filter(a => a !== acc);
+                    item.classList.remove('active');
+                } else {
+                    avatarState.accessories.push(acc);
+                    item.classList.add('active');
+                }
+                drawAvatar();
+            });
+        });
+        
+        document.querySelectorAll('.bg-item').forEach(item => {
+            item.addEventListener('click', () => {
+                document.querySelectorAll('.bg-item').forEach(b => b.classList.remove('active'));
+                item.classList.add('active');
+                avatarState.background = item.dataset.bg;
+                drawAvatar();
+            });
+        });
+        
+        document.getElementById('skinColor').addEventListener('input', (e) => {
+            avatarState.skinColor = e.target.value;
+            drawAvatar();
+        });
+        
+        document.getElementById('eyeColor').addEventListener('input', (e) => {
+            avatarState.eyeColor = e.target.value;
+            drawAvatar();
+        });
+        
+        document.getElementById('hairColor').addEventListener('input', (e) => {
+            avatarState.hairColor = e.target.value;
+            drawAvatar();
+        });
+        
+        document.getElementById('mirrorBtn').addEventListener('click', () => {
+            avatarState.mirrored = !avatarState.mirrored;
+            drawAvatar();
+        });
+        
+        document.getElementById('overlayBtn').addEventListener('click', () => {
+            avatarState.showOverlay = !avatarState.showOverlay;
+            drawAvatar();
+        });
+        
+        document.getElementById('snapshotBtn').addEventListener('click', takeSnapshot);
+        document.getElementById('startCameraBtn').addEventListener('click', startCamera);
+        document.getElementById('recordBtn').addEventListener('click', toggleRecording);
+        
+        // Initialize
+        window.addEventListener('load', () => {
+            initCanvas();
+            drawAvatar();
+            
+            // Hide loading after a delay
+            setTimeout(() => {
+                loadingOverlay.classList.add('hidden');
+            }, 1000);
+        });
+        
+        window.addEventListener('resize', () => {
+            initCanvas();
+            drawAvatar();
+        });
+    </script>
+</body>
+</html>
